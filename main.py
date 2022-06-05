@@ -73,20 +73,20 @@ class StripedAlgo:
         self.workers = []
         self.result = createMatrixWithZeros(A_Columns, B_Rows)
         self.prepareWorkers(A_matrix, B_matrix, self.result,
-                            A_Columns, A_Rows, B_Columns, B_Rows)
+                            A_Columns, A_Rows, B_Rows)
 
     def get_result(self):
         return self.result
 
-    def prepareWorkers(self, A_matrix, B_matrix, C_matrix, A_Columns, A_Rows, B_Columns, B_Rows):
+    def prepareWorkers(self, A_matrix, B_matrix, C_matrix, A_Columns, A_Rows, B_Rows):
         max_i = 0
         max_j = 0
         i = 0
         j = 0
         while (max_i != A_Columns or max_j != B_Rows):
             self.workers.append(StripeWorker(
-                i, j, A_matrix, B_matrix, C_matrix, A_Columns, A_Rows, B_Columns, B_Rows))
-                
+                i, j, A_matrix[i], B_matrix, C_matrix,  A_Rows, B_Rows))
+
             if max_i != A_Columns:
                 max_i = max_i + 1
             if max_j != B_Rows:
@@ -106,26 +106,24 @@ class StripedAlgo:
 
 
 class StripeWorker(Runnable):
-    def __init__(self,   row, column, A_matrix, B_matrix, C_matrix, A_Columns, A_Rows, B_Columns, B_Rows):
+    def __init__(self,   row, column, A_row, B_matrix, C_matrix, A_Rows, B_Rows):
         self.row = row
         self.column = column
-        self.A_matrix = A_matrix
+        self.A_row = A_row
         self.B_matrix = B_matrix
         self.C_matrix = C_matrix
-        self.A_Columns = A_Columns
         self.A_Rows = A_Rows
-        self.B_Columns = B_Columns
         self.B_Rows = B_Rows
 
-    def multiplyRowAndColumn(self, row, column, A_Rows):
+    def multiplyRowAndColumn(self, column):
         result = 0
-        for i in range(A_Rows):
-            result += self.A_matrix[row][i] * self.B_matrix[i][column]
+        for i in range(self.A_Rows):
+            result += self.A_row[i] * self.B_matrix[i][column]
         return result
 
     def run(self):
         self.C_matrix[self.row][self.column] = self.multiplyRowAndColumn(
-            row=self.row, column=self.column, A_Rows=self.A_Rows)
+            column=self.column)
         self.column = (self.column + 1) % self.B_Rows
 
 
@@ -146,24 +144,35 @@ def createMatrixWithZeros(columns, rows):
 
 # A_Columns, A_Rows, B_Columns, B_Rows = (500, 500, 500, 500)
 # A_Columns, A_Rows, B_Columns, B_Rows = (400, 300, 300, 150)
-A_Columns, A_Rows, B_Columns, B_Rows = (750, 600, 600, 850)
-n_threads = 2
-matrix_A = readMatrixFromFile(
-    './Matrices/', 'matrix_a_'+str(A_Columns)+'x'+str(A_Rows))
-matrix_B = readMatrixFromFile(
-    './Matrices/', 'matrix_b_'+str(B_Columns)+'x'+str(B_Rows))
-matrix_C = readMatrixFromFile(
-    './Matrices/', 'matrix_c_'+str(A_Columns)+'x'+str(B_Rows))
-print('Timer started')
-multiply_time = time.time()
-algo = StripedAlgo(matrix_A, matrix_B, A_Columns,
-                   A_Rows, B_Columns, B_Rows, n_threads)
-matrix_D = runIterations(B_Rows, algo)
-multiply_time = round(time.time() - multiply_time, 4)
-print('Time: ', multiply_time)
-roundMatrix(matrix_D, A_Columns, B_Rows, 2)
-roundMatrix(matrix_C, A_Columns, B_Rows, 2)
-if not CheckMatricesEqualities(matrix_C, matrix_D):
-    print('Matrices not equal!')
-    quit()
-saveMatrix(matrix_D, './Matrices/', 'matrix_d_'+str(A_Columns)+'x'+str(B_Rows))
+
+
+def main_func(A_Columns, A_Rows, B_Columns, B_Rows, n_threads):
+    matrix_A = readMatrixFromFile(
+        './Matrices/', 'matrix_a_'+str(A_Columns)+'x'+str(A_Rows))
+    matrix_B = readMatrixFromFile(
+        './Matrices/', 'matrix_b_'+str(B_Columns)+'x'+str(B_Rows))
+    matrix_C = readMatrixFromFile(
+        './Matrices/', 'matrix_c_'+str(A_Columns)+'x'+str(B_Rows))
+    print('Timer started')
+    multiply_time = time.time()
+    algo = StripedAlgo(matrix_A, matrix_B, A_Columns,
+                       A_Rows, B_Columns, B_Rows, n_threads)
+    matrix_D = runIterations(B_Rows, algo)
+    multiply_time = round(time.time() - multiply_time, 4)
+    print('Time: ', multiply_time)
+    roundMatrix(matrix_D, A_Columns, B_Rows, 2)
+    roundMatrix(matrix_C, A_Columns, B_Rows, 2)
+    if not CheckMatricesEqualities(matrix_C, matrix_D):
+        print('Matrices not equal!')
+        quit()
+    saveMatrix(matrix_D, './Matrices/', 'matrix_d_' +
+               str(A_Columns)+'x'+str(B_Rows))
+
+
+sizes = [(500, 500, 500, 500), (750, 600, 600, 850), (1000, 1000,
+                                                      1000, 1000), (1000, 1500, 1500, 1100), (2000, 2000, 2000, 2000)]
+threads = [2, 4, 6, 8]
+for i in sizes:
+    for n_thread in threads:
+        A_Columns, A_Rows, B_Columns, B_Rows = i
+        main_func(A_Columns, A_Rows, B_Columns, B_Rows, n_thread)
